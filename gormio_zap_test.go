@@ -3,8 +3,7 @@ package gormio_zap_test
 import (
 	"testing"
 
-	"gormio_zap"
-
+	gormio_zap "github.com/PayDesign/gormio-zap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
