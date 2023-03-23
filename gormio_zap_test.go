@@ -2,7 +2,9 @@ package gormio_zap_test
 
 import (
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	gormio_zap "github.com/PayDesign/gormio-zap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,11 +17,9 @@ import (
 func createTestDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	t.Helper()
 
-	// Create a new sqlmock instance.
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 
-	// Create a new GORM instance with the sqlmock driver.
 	gormDB, err := gorm.Open(mysql.New(mysql.Config{
 		Conn:                      db,
 		SkipInitializeWithVersion: true,
@@ -32,31 +32,35 @@ func createTestDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 func TestLogger(t *testing.T) {
 	db, mock := createTestDB(t)
 
-	// Create a new zap observer.
 	core, logs := observer.New(zap.DebugLevel)
 
-	// Create a new gormio_zap.Logger instance with the zap observer.
 	zapLogger := zap.New(core)
+
 	logger := gormio_zap.New(zapLogger)
 
-	// Set the gormio_zap.Logger as the GORM logger.
 	db.Logger = logger
 
-	// Define expected SQL query and mock result.
-	mock.ExpectQuery("SELECT \\* FROM users").WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "John Doe"))
+	mock.ExpectQuery("SELECT \\* FROM `transfer_requests`").WillReturnRows(sqlmock.NewRows([]string{"transfer_request_id", "transfer_status", "amount", "transfer_method", "dry_run", "created_at", "updated_at"}).AddRow(1, 2, 1000, 1, 0, time.Now(), time.Now()))
 
-	type User struct {
-		ID   int
-		Name string
+	type TransferRequest struct {
+		TransferRequestID uint64 `gorm:"primaryKey"`
+		TransferStatus    uint8
+		Amount            uint64
+		TransferMethod    uint8
+		DryRun            bool
+		CreatedAt         time.Time
+		UpdatedAt         time.Time
 	}
+	var expectedTransferRequests = []TransferRequest{{TransferRequestID: 1, TransferStatus: 2, Amount: 1000, TransferMethod: 1, DryRun: false}}
 
-	// Run a GORM query.
-	var users []User
-	err := db.Find(&users).Error
+	var transferRequests []TransferRequest
+	err := db.Find(&transferRequests).Error
 	require.NoError(t, err)
 
-	// Check if the logger logs the expected message.
-	expectedMessage := "SELECT * FROM users"
+	assert.IsType(t, expectedTransferRequests, transferRequests)
+
+	expectedMessage := "SELECT * FROM `transfer_requests`"
+
 	found := false
 	for _, log := range logs.All() {
 		if log.Message == "trace" && log.ContextMap()["sql"] == expectedMessage {
